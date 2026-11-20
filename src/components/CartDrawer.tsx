@@ -28,6 +28,11 @@ interface CartDrawerProps {
   onRemoveItem: (cartId: string) => void;
   onClearCart: () => void;
   onOpenSignUp: () => void;
+  onCheckoutSignUp: (
+    name: string,
+    email: string,
+    phone: string
+  ) => { ok: boolean; error?: string; member?: MemberAccount };
   onCompleteMemberOrder: (
     memberId: string,
     options: {
@@ -67,6 +72,7 @@ export function CartDrawer({
   onRemoveItem,
   onClearCart,
   onOpenSignUp,
+  onCheckoutSignUp,
   onCompleteMemberOrder,
 }: CartDrawerProps) {
   const [step, setStep] = useState<CheckoutStep>('cart');
@@ -82,6 +88,8 @@ export function CartDrawer({
   const [phone, setPhone] = useState<string>('');
   const [postalCode, setPostalCode] = useState<string>('');
   const [streetAddress, setStreetAddress] = useState<string>('');
+  const [joinAtCheckout, setJoinAtCheckout] = useState<boolean>(false);
+  const [checkoutEmail, setCheckoutEmail] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'PayNow' | 'Card' | 'Apple Pay'>('PayNow');
   const [formError, setFormError] = useState<string>('');
   const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
@@ -107,10 +115,14 @@ export function CartDrawer({
   const totalCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const deliveryFee = calculateDeliveryFee(subtotal, fulfillment, isRemoteZone);
 
-  const canUseVoucher = Boolean(currentMember && !currentMember.voucherUsed && subtotal > 0);
+  const canUseVoucher = Boolean(
+    ((currentMember && !currentMember.voucherUsed) || (!currentMember && joinAtCheckout)) &&
+      subtotal > 0
+  );
+  const voucherAmountAvailable = currentMember ? currentMember.voucherAmount : 20;
   const voucherDiscount =
     canUseVoucher && applyMemberVoucher
-      ? Math.min(currentMember!.voucherAmount, subtotal)
+      ? Math.min(voucherAmountAvailable, subtotal)
       : 0;
 
   const memberPoints = currentMember?.points ?? 0;
@@ -168,18 +180,42 @@ export function CartDrawer({
       }
     }
 
+    if (!currentMember && joinAtCheckout) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail.trim())) {
+        setFormError('Please enter a valid email address to create your member account.');
+        return;
+      }
+    }
+
     const usedVoucher = voucherDiscount > 0;
     const usedPoints = pointsDiscount > 0;
+    let activeMember = currentMember;
+
+    if (!activeMember && joinAtCheckout) {
+      const signUpRes = onCheckoutSignUp(
+        fullName.trim(),
+        checkoutEmail.trim().toLowerCase(),
+        phone.replace(/\s+/g, '')
+      );
+      if (!signUpRes.ok || !signUpRes.member) {
+        setFormError(signUpRes.error || 'Could not complete member sign-up.');
+        return;
+      }
+      activeMember = signUpRes.member;
+    }
+
     let updatedBalance: number | null = null;
 
-    if (currentMember) {
+    if (activeMember) {
       updatedBalance =
-        Math.max(0, currentMember.points - (usedPoints ? 10 : 0)) + pointsEarnedOnOrder;
-      onCompleteMemberOrder(currentMember.id, {
+        Math.max(0, activeMember.points - (usedPoints ? 10 : 0)) + pointsEarnedOnOrder;
+      onCompleteMemberOrder(activeMember.id, {
         usedWelcomeVoucher: usedVoucher,
         usedPointsReward: usedPoints,
         pointsEarned: pointsEarnedOnOrder,
       });
+      setJoinAtCheckout(false);
+      setCheckoutEmail('');
     }
 
     const orderNum = `BBG-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -796,6 +832,45 @@ export function CartDrawer({
                   </>
                 )}
               </div>
+
+              {!currentMember && (
+                <div className="bg-[#E8EFEA] border border-[#1B3B2B]/20 rounded-2xl p-4 space-y-3">
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#1B3B2B]">
+                    <input
+                      type="checkbox"
+                      checked={joinAtCheckout}
+                      onChange={(e) => setJoinAtCheckout(e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#1B3B2B] mt-0.5 shrink-0"
+                    />
+                    <span>
+                      <strong className="block text-sm font-semibold">
+                        Sign up as a member with this order
+                      </strong>
+                      Get $20 off right now (WELCOME20, valid till 31st Dec) and earn loyalty points on this order.
+                    </span>
+                  </label>
+
+                  {joinAtCheckout && (
+                    <div>
+                      <label
+                        htmlFor="checkout-member-email"
+                        className="block text-xs font-semibold text-[#1B3B2B] mb-1.5"
+                      >
+                        Member Email Address
+                      </label>
+                      <input
+                        id="checkout-member-email"
+                        type="email"
+                        required={joinAtCheckout}
+                        value={checkoutEmail}
+                        onChange={(e) => setCheckoutEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#1B3B2B]/30 bg-white text-sm text-zinc-900 focus:outline-none focus:border-[#5D2E6D]"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="border-t border-[#E5E1D8] pt-4">
                 <span className="block text-xs font-semibold text-zinc-800 mb-2.5">

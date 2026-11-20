@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Check,
   MapPin,
   Plus,
   Search,
@@ -11,7 +10,6 @@ import {
   Truck,
   User,
   Utensils,
-  X,
 } from 'lucide-react';
 import { BuildYourOwnView } from './components/BuildYourOwnView';
 import { CartDrawer } from './components/CartDrawer';
@@ -27,10 +25,10 @@ import {
   MenuItem,
   PICKUP_OUTLETS,
 } from './data/menu';
+import { variant, track, consent, setConsent, loadClarity } from './pt';
 
 const MEMBERS_STORAGE_KEY = 'bbg_members_v1';
 const CURRENT_MEMBER_STORAGE_KEY = 'bbg_current_member_v1';
-const SIGNUP_COUNT_STORAGE_KEY = 'bbg_signup_count_v1';
 
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<CategoryId>('signature');
@@ -38,10 +36,12 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showPromoBanner, setShowPromoBanner] = useState<boolean>(true);
+  const [activeVariant] = useState(() => variant());
+  const [consentChoice, setConsentChoice] = useState<'granted' | 'denied' | null>(() => consent());
+  const didTrackInitialViewRef = useRef(false);
+  const signUpFromCheckoutRef = useRef(false);
 
-  // Membership & Sign-up Measurement State
+  // Membership State
   const [members, setMembers] = useState<MemberAccount[]>(() => {
     try {
       const saved = localStorage.getItem(MEMBERS_STORAGE_KEY);
@@ -69,16 +69,17 @@ export default function App() {
       return null;
     }
   });
-  const [totalSignUps, setTotalSignUps] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem(SIGNUP_COUNT_STORAGE_KEY);
-      return saved ? Number(saved) || 0 : 0;
-    } catch {
-      return 0;
-    }
-  });
   const [memberModalOpen, setMemberModalOpen] = useState<boolean>(false);
   const [memberModalTab, setMemberModalTab] = useState<'signup' | 'signin' | 'account'>('signin');
+
+  useEffect(() => {
+    if (didTrackInitialViewRef.current) return;
+    didTrackInitialViewRef.current = true;
+    if (consent() === 'granted') {
+      loadClarity();
+    }
+    track('screen_view');
+  }, []);
 
   useEffect(() => {
     try {
@@ -99,14 +100,6 @@ export default function App() {
       // Ignore storage errors
     }
   }, [currentMemberId]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(SIGNUP_COUNT_STORAGE_KEY, String(totalSignUps));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [totalSignUps]);
 
   const currentMember = useMemo(
     () => members.find((m) => m.id === currentMemberId) || null,
@@ -138,17 +131,9 @@ export default function App() {
     return MENU_ITEMS.filter((item) => item.category === activeCategory);
   }, [activeCategory, searchQuery]);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 2600);
-  };
-
   const handleAddToCart = (newItem: CartItem) => {
     setCart((prev) => [...prev, newItem]);
     setIsCartOpen(true);
-    showToast(`Added ${newItem.name} to cart`);
   };
 
   const handleUpdateQty = (cartId: string, delta: number) => {
@@ -169,7 +154,7 @@ export default function App() {
     setCart([]);
   };
 
-  const handleSignUp = (name: string, email: string, phone: string) => {
+  const createMemberAccount = (name: string, email: string, phone: string) => {
     const existing = members.find((m) => m.email === email);
     if (existing) {
       return { ok: false, error: 'An account with this email already exists. Please sign in.' };
@@ -189,8 +174,25 @@ export default function App() {
 
     setMembers((prev) => [newMember, ...prev]);
     setCurrentMemberId(newMember.id);
-    setTotalSignUps((count) => count + 1);
-    return { ok: true };
+    return { ok: true, member: newMember };
+  };
+
+  const handleSignUp = (name: string, email: string, phone: string) => {
+    const result = createMemberAccount(name, email, phone);
+    if (result.ok && signUpFromCheckoutRef.current) {
+      signUpFromCheckoutRef.current = false;
+      track('goal_complete');
+    }
+    return { ok: result.ok, error: result.error };
+  };
+
+  const handleCheckoutSignUp = (name: string, email: string, phone: string) => {
+    const result = createMemberAccount(name, email, phone);
+    if (result.ok) {
+      signUpFromCheckoutRef.current = false;
+      track('goal_complete');
+    }
+    return result;
   };
 
   const handleSignIn = (email: string) => {
@@ -200,13 +202,10 @@ export default function App() {
     }
     setCurrentMemberId(found.id);
     setMemberModalOpen(false);
-    showToast(`Welcome back, ${found.name.split(' ')[0]} · Choose your açaí below`);
-    setTimeout(() => {
-      const menuEl = document.getElementById('menu-section');
-      if (menuEl) {
-        menuEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 80);
+    const menuEl = document.getElementById('menu-section');
+    if (menuEl) {
+      menuEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     return { ok: true };
   };
 
@@ -236,7 +235,8 @@ export default function App() {
     );
   };
 
-  const openMemberModal = (tab: 'signup' | 'signin' | 'account') => {
+  const openMemberModal = (tab: 'signup' | 'signin' | 'account', fromCheckout = false) => {
+    signUpFromCheckoutRef.current = fromCheckout;
     setMemberModalTab(tab);
     setMemberModalOpen(true);
   };
@@ -256,11 +256,11 @@ export default function App() {
         isCartOpen ? 'md:pr-[380px] lg:pr-[420px]' : ''
       }`}
     >
-      {/* Locked Sticky Header Stack: Fixed New Members Offer Banner + Top Bar */}
+      {/* Locked Sticky Header Stack: Fixed New Members Offer Banner (Version B only) + Top Bar */}
       <div className="sticky top-0 z-30">
-        {showPromoBanner && (
+        {activeVariant === 'B' && (
           <div className="bg-[#FAF9F6]/95 backdrop-blur-md pt-2 px-3 sm:px-6 lg:px-8 pb-2 border-b border-[#E5E1D8]/60">
-            <div className="max-w-7xl mx-auto rounded-2xl bg-[#14532D] border-2 border-[#22C55E] px-4 py-2.5 sm:px-5 sm:py-3.5 text-white shadow-sm relative flex items-center justify-between gap-3 pr-11">
+            <div className="max-w-7xl mx-auto rounded-2xl bg-[#14532D] border-2 border-[#22C55E] px-4 py-2.5 sm:px-5 sm:py-3.5 text-white shadow-sm flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] sm:text-xs font-semibold tracking-wide text-white/90 truncate">
                   New Member Offer · Valid till 31st Dec
@@ -271,18 +271,13 @@ export default function App() {
               </div>
               <button
                 type="button"
-                onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
+                onClick={() => {
+                  track('cta_click');
+                  openMemberModal(currentMember ? 'account' : 'signup');
+                }}
                 className="min-h-[40px] px-3.5 sm:px-5 py-2 rounded-xl border-2 border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] text-white text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-colors"
               >
-                {currentMember ? 'My Card' : 'Sign Up & Claim $20'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPromoBanner(false)}
-                aria-label="Dismiss promotion banner"
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10"
-              >
-                <X className="w-4 h-4" />
+                Join now
               </button>
             </div>
           </div>
@@ -405,31 +400,6 @@ export default function App() {
                 alt="BellyBellyGood organic Brazilian açaí bowls with fresh berries, banana, kiwi, and honey granola"
                 className="w-full h-full object-cover"
               />
-            </div>
-          </div>
-
-          {/* Strategic New Member Offer Spotlight — Prominent Green Border with White Words */}
-          <div className="mt-5 rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-5 sm:p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold tracking-wide text-white/90">
-                New Member Offer · Valid till 31st Dec
-              </p>
-              <h2 className="font-display text-xl sm:text-2xl font-semibold text-white leading-snug">
-                Join BellyBellyGood today and get a $20 welcome voucher
-              </h2>
-              <p className="text-sm text-white/90">
-                Instant $20 off your order with code WELCOME20 · Offer valid till 31st Dec
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
-                className="min-h-[48px] px-6 py-3 rounded-xl border-2 border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0"
-              >
-                {currentMember ? 'View My $20 Voucher' : 'Sign Up & Claim $20'}
-              </button>
             </div>
           </div>
 
@@ -759,29 +729,40 @@ export default function App() {
         </button>
       </nav>
 
-      {/* Subtle Add-to-Cart Toast */}
-      {toastMessage && (
+      {/* Bottom Consent Notice */}
+      {consentChoice === null && (
         <div
-          role="status"
-          aria-live="polite"
-          className={`fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#1B3B2B] text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-3 text-xs font-semibold whitespace-nowrap ${
-            isCartOpen ? 'md:left-[calc(50%-190px)] lg:left-[calc(50%-210px)]' : ''
-          }`}
+          role="region"
+          aria-label="Experiment consent notice"
+          className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E5E1D8] shadow-lg px-4 py-4 sm:px-6"
         >
-          <Check className="w-4 h-4 shrink-0" />
-          <span>{toastMessage}</span>
-          {!isCartOpen && (
-            <button
-              type="button"
-              onClick={() => {
-                setToastMessage(null);
-                setIsCartOpen(true);
-              }}
-              className="underline underline-offset-2 text-white/90 hover:text-white ml-1"
-            >
-              View Cart
-            </button>
-          )}
+          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <p className="text-xs sm:text-sm text-zinc-700 leading-relaxed">
+              This class prototype records which version you saw and what you pressed, to test a design. Nothing about your visit leaves this browser unless you agree.
+            </p>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setConsent('granted');
+                  setConsentChoice('granted');
+                }}
+                className="min-h-[40px] px-5 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-sm font-semibold transition-colors whitespace-nowrap"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConsent('denied');
+                  setConsentChoice('denied');
+                }}
+                className="min-h-[40px] px-5 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-sm font-semibold transition-colors whitespace-nowrap"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -803,8 +784,9 @@ export default function App() {
         onClearCart={handleClearCart}
         onOpenSignUp={() => {
           setIsCartOpen(false);
-          openMemberModal('signup');
+          openMemberModal('signup', true);
         }}
+        onCheckoutSignUp={handleCheckoutSignUp}
         onCompleteMemberOrder={handleCompleteMemberOrder}
       />
 
@@ -813,7 +795,10 @@ export default function App() {
         isOpen={memberModalOpen}
         initialTab={memberModalTab}
         currentMember={currentMember}
-        onClose={() => setMemberModalOpen(false)}
+        onClose={() => {
+          signUpFromCheckoutRef.current = false;
+          setMemberModalOpen(false);
+        }}
         onSignUp={handleSignUp}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}

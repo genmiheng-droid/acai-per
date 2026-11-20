@@ -26,7 +26,6 @@ export function BuildYourOwnView({ onAddToCart }: BuildYourOwnViewProps) {
     'Peruvian Cacao Nibs',
   ]);
   const [drizzleId, setDrizzleId] = useState<string>('cookie-butter');
-  const [justAdded, setJustAdded] = useState(false);
 
   const activeSize = MYO_SIZES.find((s) => s.id === sizeId) || MYO_SIZES[1];
   const activeBase = MYO_BASES.find((b) => b.id === baseId) || MYO_BASES[0];
@@ -86,9 +85,6 @@ export function BuildYourOwnView({ onAddToCart }: BuildYourOwnViewProps) {
       addOns: [],
       customDetails: details,
     });
-
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1600);
   };
 
   return (
@@ -373,20 +369,9 @@ export function BuildYourOwnView({ onAddToCart }: BuildYourOwnViewProps) {
             <button
               type="button"
               onClick={handleAdd}
-              className={`w-full min-h-[48px] px-5 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] ${
-                justAdded
-                  ? 'bg-[#1B3B2B] text-white'
-                  : 'bg-[#5D2E6D] hover:bg-[#441E52] text-white'
-              }`}
+              className="w-full min-h-[48px] px-5 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] bg-[#5D2E6D] hover:bg-[#441E52] text-white"
             >
-              {justAdded ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>Added to Cart</span>
-                </>
-              ) : (
-                <span>Add to Cart — ${totalPrice.toFixed(2)}</span>
-              )}
+              <span>Add to Cart — ${totalPrice.toFixed(2)}</span>
             </button>
           </div>
         </aside>
