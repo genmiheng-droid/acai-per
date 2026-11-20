@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -7,20 +7,25 @@ import {
   Plus,
   ShoppingBag,
   Snowflake,
+  Ticket,
   Trash2,
   Truck,
   X,
 } from 'lucide-react';
 import { calculateDeliveryFee, CartItem, PICKUP_OUTLETS } from '../data/menu';
+import { MemberAccount } from './MemberAuthModal';
 import { ResilientImage } from './ResilientImage';
 
 interface CartDrawerProps {
   isOpen: boolean;
   items: CartItem[];
+  currentMember: MemberAccount | null;
   onClose: () => void;
   onUpdateQty: (cartId: string, delta: number) => void;
   onRemoveItem: (cartId: string) => void;
   onClearCart: () => void;
+  onOpenSignUp: () => void;
+  onRedeemVoucher: (memberId: string) => void;
 }
 
 type CheckoutStep = 'bag' | 'checkout' | 'confirmed';
@@ -30,6 +35,7 @@ interface ConfirmedOrder {
   fulfillment: 'delivery' | 'pickup';
   slotOrOutlet: string;
   total: number;
+  discountApplied: number;
   customerName: string;
   addressSummary: string;
   paymentMethod: string;
@@ -39,16 +45,20 @@ interface ConfirmedOrder {
 export function CartDrawer({
   isOpen,
   items,
+  currentMember,
   onClose,
   onUpdateQty,
   onRemoveItem,
   onClearCart,
+  onOpenSignUp,
+  onRedeemVoucher,
 }: CartDrawerProps) {
   const [step, setStep] = useState<CheckoutStep>('bag');
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
   const [deliverySlot, setDeliverySlot] = useState<string>('Next-Day (12:00 PM – 4:00 PM)');
   const [pickupOutlet, setPickupOutlet] = useState<string>(PICKUP_OUTLETS[0]);
   const [isRemoteZone, setIsRemoteZone] = useState<boolean>(false);
+  const [applyMemberVoucher, setApplyMemberVoucher] = useState<boolean>(true);
 
   // Checkout form fields
   const [fullName, setFullName] = useState<string>('');
@@ -59,18 +69,29 @@ export function CartDrawer({
   const [formError, setFormError] = useState<string>('');
   const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
 
+  useEffect(() => {
+    if (currentMember) {
+      if (!fullName) setFullName(currentMember.name);
+      if (!phone) setPhone(currentMember.phone);
+    }
+  }, [currentMember, fullName, phone]);
+
   if (!isOpen) return null;
 
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const totalCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const deliveryFee = calculateDeliveryFee(subtotal, fulfillment, isRemoteZone);
-  const grandTotal = subtotal + deliveryFee;
+  const canUseVoucher = Boolean(currentMember && !currentMember.voucherUsed && subtotal > 0);
+  const voucherDiscount =
+    canUseVoucher && applyMemberVoucher
+      ? Math.min(currentMember!.voucherAmount, subtotal)
+      : 0;
+  const grandTotal = Math.max(0, subtotal - voucherDiscount + deliveryFee);
 
-  // Delivery tier messaging (matches anacaiaffair.com/acai-delivery-singapore)
   let tierHint = '';
   let tierProgress = 0;
   if (fulfillment === 'pickup') {
-    tierHint = 'Self-pickup at any An Açaí Affair outlet is always free.';
+    tierHint = 'Self-pickup at any BellyBellyGood outlet is always free.';
     tierProgress = 100;
   } else if (subtotal === 0) {
     tierHint = 'Free Singapore islandwide delivery on orders $121 and above.';
@@ -111,12 +132,17 @@ export function CartDrawer({
       }
     }
 
-    const orderNum = `AAA-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (voucherDiscount > 0 && currentMember) {
+      onRedeemVoucher(currentMember.id);
+    }
+
+    const orderNum = `BBG-${Math.floor(1000 + Math.random() * 9000)}`;
     setConfirmedOrder({
       orderNumber: orderNum,
       fulfillment,
       slotOrOutlet: fulfillment === 'delivery' ? deliverySlot : pickupOutlet,
       total: grandTotal,
+      discountApplied: voucherDiscount,
       customerName: fullName.trim(),
       addressSummary:
         fulfillment === 'delivery'
@@ -217,6 +243,14 @@ export function CartDrawer({
                 <span className="text-zinc-500">Payment</span>
                 <span className="font-medium text-zinc-900 text-right">{confirmedOrder.paymentMethod}</span>
               </div>
+              {confirmedOrder.discountApplied > 0 && (
+                <div className="flex justify-between gap-4 text-[#1B3B2B]">
+                  <span>New Member Voucher</span>
+                  <span className="font-semibold tabular-nums">
+                    -${confirmedOrder.discountApplied.toFixed(2)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between gap-4 pt-3 border-t border-[#E5E1D8]">
                 <span className="font-semibold text-zinc-900">Total Paid</span>
                 <span className="font-bold tabular-nums text-[#441E52]">
@@ -247,7 +281,7 @@ export function CartDrawer({
             </div>
             <h3 className="font-display text-xl font-semibold text-zinc-900">Your bag is empty</h3>
             <p className="text-sm text-zinc-600 mt-1.5 max-w-xs">
-              Explore our Signature Bowls, Build Your Own, or Take-Home Pints for islandwide Singapore delivery.
+              Explore BellyBellyGood Signature Bowls, Build Your Own, or Take-Home Pints for islandwide Singapore delivery.
             </p>
             <button
               type="button"
@@ -287,6 +321,41 @@ export function CartDrawer({
                   Outlet Pickup
                 </button>
               </div>
+
+              {/* Member $20 Voucher Callout */}
+              {canUseVoucher ? (
+                <label className="bg-[#E8EFEA] border border-[#1B3B2B]/15 rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    <Ticket className="w-4 h-4 text-[#1B3B2B] shrink-0" />
+                    <div className="text-xs">
+                      <p className="font-semibold text-[#1B3B2B]">
+                        Apply $20 New Member Voucher (WELCOME20)
+                      </p>
+                      <p className="text-[#1B3B2B]/80">Valid till 31st Dec</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={applyMemberVoucher}
+                    onChange={(e) => setApplyMemberVoucher(e.target.checked)}
+                    className="w-4 h-4 rounded accent-[#1B3B2B]"
+                  />
+                </label>
+              ) : !currentMember ? (
+                <div className="bg-white border border-[#E5E1D8] rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    <p className="font-semibold text-zinc-900">New members get $20 voucher</p>
+                    <p className="text-zinc-500">Offer valid till 31st Dec</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onOpenSignUp}
+                    className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[#5D2E6D] text-white text-xs font-semibold whitespace-nowrap shrink-0"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              ) : null}
 
               {/* Delivery fee tier progress */}
               <div className="bg-white border border-[#E5E1D8] rounded-2xl p-4 space-y-2.5">
@@ -444,6 +513,12 @@ export function CartDrawer({
                   <span>Subtotal</span>
                   <span className="tabular-nums font-medium">${subtotal.toFixed(2)}</span>
                 </div>
+                {voucherDiscount > 0 && (
+                  <div className="flex justify-between text-[#1B3B2B]">
+                    <span>New Member Voucher (WELCOME20)</span>
+                    <span className="tabular-nums font-semibold">-${voucherDiscount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-zinc-600">
                   <span>
                     {fulfillment === 'delivery' ? 'Islandwide Thermal Delivery' : 'Self-Pickup'}

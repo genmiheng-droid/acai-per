@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   MapPin,
@@ -9,11 +9,14 @@ import {
   Snowflake,
   Sparkles,
   Truck,
+  User,
   Utensils,
+  X,
 } from 'lucide-react';
 import { BuildYourOwnView } from './components/BuildYourOwnView';
 import { CartDrawer } from './components/CartDrawer';
 import { ItemDetailSheet } from './components/ItemDetailSheet';
+import { MemberAccount, MemberAuthModal } from './components/MemberAuthModal';
 import { ResilientImage } from './components/ResilientImage';
 import {
   CATEGORY_TABS,
@@ -25,6 +28,10 @@ import {
   PICKUP_OUTLETS,
 } from './data/menu';
 
+const MEMBERS_STORAGE_KEY = 'bbg_members_v1';
+const CURRENT_MEMBER_STORAGE_KEY = 'bbg_current_member_v1';
+const SIGNUP_COUNT_STORAGE_KEY = 'bbg_signup_count_v1';
+
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<CategoryId>('signature');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -32,6 +39,67 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showPromoBanner, setShowPromoBanner] = useState<boolean>(true);
+
+  // Membership & Sign-up Measurement State
+  const [members, setMembers] = useState<MemberAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem(MEMBERS_STORAGE_KEY);
+      return saved ? (JSON.parse(saved) as MemberAccount[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [currentMemberId, setCurrentMemberId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(CURRENT_MEMBER_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [totalSignUps, setTotalSignUps] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(SIGNUP_COUNT_STORAGE_KEY);
+      return saved ? Number(saved) || 0 : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [memberModalOpen, setMemberModalOpen] = useState<boolean>(false);
+  const [memberModalTab, setMemberModalTab] = useState<'signup' | 'signin' | 'account'>('signin');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(members));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [members]);
+
+  useEffect(() => {
+    try {
+      if (currentMemberId) {
+        localStorage.setItem(CURRENT_MEMBER_STORAGE_KEY, currentMemberId);
+      } else {
+        localStorage.removeItem(CURRENT_MEMBER_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [currentMemberId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIGNUP_COUNT_STORAGE_KEY, String(totalSignUps));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [totalSignUps]);
+
+  const currentMember = useMemo(
+    () => members.find((m) => m.id === currentMemberId) || null,
+    [members, currentMemberId]
+  );
 
   const totalBagCount = useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
@@ -58,16 +126,16 @@ export default function App() {
     return MENU_ITEMS.filter((item) => item.category === activeCategory);
   }, [activeCategory, searchQuery]);
 
-  const showAddedToast = (name: string) => {
-    setToastMessage(`Added ${name} to bag`);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
     setTimeout(() => {
-      setToastMessage((prev) => (prev === `Added ${name} to bag` ? null : prev));
-    }, 2400);
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 2600);
   };
 
   const handleAddToCart = (newItem: CartItem) => {
     setCart((prev) => [...prev, newItem]);
-    showAddedToast(newItem.name);
+    showToast(`Added ${newItem.name} to bag`);
   };
 
   const handleUpdateQty = (cartId: string, delta: number) => {
@@ -88,6 +156,53 @@ export default function App() {
     setCart([]);
   };
 
+  const handleSignUp = (name: string, email: string, phone: string) => {
+    const existing = members.find((m) => m.email === email);
+    if (existing) {
+      return { ok: false, error: 'An account with this email already exists. Please sign in.' };
+    }
+
+    const newMember: MemberAccount = {
+      id: `mem-${Date.now()}`,
+      name,
+      email,
+      phone,
+      joinedAt: new Date().toISOString(),
+      voucherCode: 'WELCOME20',
+      voucherAmount: 20,
+      voucherUsed: false,
+    };
+
+    setMembers((prev) => [newMember, ...prev]);
+    setCurrentMemberId(newMember.id);
+    setTotalSignUps((count) => count + 1);
+    return { ok: true };
+  };
+
+  const handleSignIn = (email: string) => {
+    const found = members.find((m) => m.email === email);
+    if (!found) {
+      return { ok: false, error: 'No member account found for that email. Sign up to claim your $20 voucher.' };
+    }
+    setCurrentMemberId(found.id);
+    return { ok: true };
+  };
+
+  const handleSignOut = () => {
+    setCurrentMemberId(null);
+  };
+
+  const handleRedeemVoucher = (memberId: string) => {
+    setMembers((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, voucherUsed: true } : m))
+    );
+  };
+
+  const openMemberModal = (tab: 'signup' | 'signin' | 'account') => {
+    setMemberModalTab(tab);
+    setMemberModalOpen(true);
+  };
+
   const navigateToCategory = (category: CategoryId) => {
     setSearchQuery('');
     setActiveCategory(category);
@@ -99,14 +214,40 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col pb-20 md:pb-0">
-      {/* Top Bar Contract: 3 zones separated by gap-8 (Brand — 4 Nav Links — 1 Primary Action) */}
+      {/* Slim Dismissible Top Sign-Up Banner (<= 40px height, non-sticky) */}
+      {showPromoBanner && (
+        <div className="bg-[#1B3B2B] text-white min-h-[38px] px-4 py-1.5 flex items-center justify-center relative">
+          <div className="flex items-center justify-center gap-3 pr-7 text-xs font-medium">
+            <span className="truncate">
+              New members get $20 voucher · Offer valid till 31st Dec
+            </span>
+            <button
+              type="button"
+              onClick={() => openMemberModal('signup')}
+              className="underline underline-offset-2 font-semibold text-white hover:text-white/85 whitespace-nowrap shrink-0"
+            >
+              Sign Up
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPromoBanner(false)}
+            aria-label="Dismiss promotion banner"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-white/80 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Top Bar: Brand — Nav Links — Member Sign In (top right) + Bag */}
       <header className="sticky top-0 z-30 h-[54px] md:h-16 bg-[#FAF9F6]/95 backdrop-blur-md border-b border-[#E5E1D8]">
-        <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-8">
+        <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 md:gap-8">
           <a
             href="#top"
             className="font-display text-xl md:text-2xl font-semibold tracking-tight text-[#1B3B2B] whitespace-nowrap shrink-0"
           >
-            An Açaí Affair
+            BellyBellyGood
           </a>
 
           <nav
@@ -142,18 +283,34 @@ export default function App() {
             </a>
           </nav>
 
-          <button
-            type="button"
-            onClick={() => setIsCartOpen(true)}
-            className="min-h-[40px] px-4 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-xs sm:text-sm font-semibold inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>Bag</span>
-            <span className="tabular-nums">
-              ({totalBagCount})
-              {bagSubtotal > 0 ? ` · $${bagSubtotal.toFixed(2)}` : ''}
-            </span>
-          </button>
+          {/* Top Right Hand Corner: Member Sign-In + Bag */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => openMemberModal(currentMember ? 'account' : 'signin')}
+              className="min-h-[40px] px-3 py-2 rounded-xl border border-[#E5E1D8] bg-white hover:bg-[#F3F1EC] text-zinc-900 text-xs sm:text-sm font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            >
+              <User className="w-4 h-4 text-[#5D2E6D]" />
+              <span>
+                {currentMember
+                  ? `${currentMember.name.split(' ')[0]}${!currentMember.voucherUsed ? ' · $20' : ''}`
+                  : 'Member Sign In'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCartOpen(true)}
+              className="hidden md:inline-flex min-h-[40px] px-4 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-xs sm:text-sm font-semibold items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Bag</span>
+              <span className="tabular-nums">
+                ({totalBagCount})
+                {bagSubtotal > 0 ? ` · $${bagSubtotal.toFixed(2)}` : ''}
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -172,7 +329,7 @@ export default function App() {
                 Pure, thick, undiluted açaí bowls delivered chilled to your door.
               </h1>
               <p className="mt-4 text-sm sm:text-base text-zinc-600 leading-relaxed max-w-lg">
-                Zero apple juice dilution, zero artificial sweeteners. Packed in insulated thermal bags with ice packs so every Triple A bowl and pint arrives frozen firm across Singapore.
+                Zero apple juice dilution, zero artificial sweeteners. Packed in insulated thermal bags with ice packs so every BellyBellyGood bowl and pint arrives frozen firm across Singapore.
               </p>
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -196,7 +353,7 @@ export default function App() {
             <div className="lg:col-span-6 min-h-[240px] sm:min-h-[320px] lg:min-h-[420px] bg-[#F3F1EC]">
               <ResilientImage
                 src={HERO_IMAGE}
-                alt="An Açaí Affair organic Brazilian açaí bowls with fresh berries, banana, kiwi, and honey granola"
+                alt="BellyBellyGood organic Brazilian açaí bowls with fresh berries, banana, kiwi, and honey granola"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -222,12 +379,16 @@ export default function App() {
                 Thermal bag + ice packs
               </p>
             </div>
-            <div className="bg-white border border-[#E5E1D8] rounded-2xl p-4">
-              <p className="text-xs text-zinc-500">Outlet Self-Pickup</p>
-              <p className="mt-1 text-sm font-semibold text-zinc-900">
-                5 Singapore cafés · Free
+            <button
+              type="button"
+              onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
+              className="bg-white border border-[#E5E1D8] hover:border-[#5D2E6D] rounded-2xl p-4 text-left transition-colors"
+            >
+              <p className="text-xs text-zinc-500">New Member Offer · Till 31 Dec</p>
+              <p className="mt-1 text-sm font-semibold text-[#441E52] tabular-nums">
+                $20 Voucher · {totalSignUps} Sign-Ups
               </p>
-            </div>
+            </button>
           </div>
         </section>
 
@@ -391,7 +552,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mb-8">
               <p className="text-xs font-semibold text-[#1B3B2B] mb-1.5">
-                Singapore Islandwide Delivery Guide
+                BellyBellyGood Islandwide Delivery Guide
               </p>
               <h2
                 id="delivery-heading"
@@ -435,7 +596,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-zinc-500">
           <div>
             <span className="font-display text-base font-semibold text-[#1B3B2B]">
-              An Açaí Affair
+              BellyBellyGood
             </span>
             <p className="mt-1">100% Organic Brazilian Açaí · Singapore Islandwide Ordering</p>
           </div>
@@ -456,10 +617,10 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => navigateToCategory('bundles')}
+              onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
               className="hover:text-zinc-900"
             >
-              Party Bundles
+              Membership ($20 Voucher)
             </button>
           </div>
         </div>
@@ -557,10 +718,29 @@ export default function App() {
       <CartDrawer
         isOpen={isCartOpen}
         items={cart}
+        currentMember={currentMember}
         onClose={() => setIsCartOpen(false)}
         onUpdateQty={handleUpdateQty}
         onRemoveItem={handleRemoveItem}
         onClearCart={handleClearCart}
+        onOpenSignUp={() => {
+          setIsCartOpen(false);
+          openMemberModal('signup');
+        }}
+        onRedeemVoucher={handleRedeemVoucher}
+      />
+
+      {/* Member Sign-In / Sign-Up & Sign-Up Metric Modal */}
+      <MemberAuthModal
+        isOpen={memberModalOpen}
+        initialTab={memberModalTab}
+        currentMember={currentMember}
+        members={members}
+        totalSignUps={totalSignUps}
+        onClose={() => setMemberModalOpen(false)}
+        onSignUp={handleSignUp}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
       />
     </div>
   );
