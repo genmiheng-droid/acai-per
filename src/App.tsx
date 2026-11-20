@@ -216,15 +216,15 @@ export default function App() {
     <div className="min-h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col pb-20 md:pb-0">
       {/* Slim Dismissible Top Sign-Up Banner (<= 40px height, non-sticky) */}
       {showPromoBanner && (
-        <div className="bg-[#1B3B2B] text-white min-h-[38px] px-4 py-1.5 flex items-center justify-center relative">
-          <div className="flex items-center justify-center gap-3 pr-7 text-xs font-medium">
+        <div className="bg-[#14532D] border-y-2 border-[#22C55E] text-white min-h-[40px] px-4 py-1.5 flex items-center justify-center relative">
+          <div className="flex items-center justify-center gap-3 pr-8 text-xs sm:text-sm font-medium text-white">
             <span className="truncate">
               New members get $20 voucher · Offer valid till 31st Dec
             </span>
             <button
               type="button"
               onClick={() => openMemberModal('signup')}
-              className="underline underline-offset-2 font-semibold text-white hover:text-white/85 whitespace-nowrap shrink-0"
+              className="px-2.5 py-0.5 rounded-md border border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] font-semibold text-white whitespace-nowrap shrink-0 transition-colors"
             >
               Sign Up
             </button>
@@ -233,7 +233,7 @@ export default function App() {
             type="button"
             onClick={() => setShowPromoBanner(false)}
             aria-label="Dismiss promotion banner"
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-white/80 hover:text-white"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-white/85 hover:text-white"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -316,7 +316,7 @@ export default function App() {
 
       <main id="top" className="flex-1">
         {/* Hero Split */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-8">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch bg-white border border-[#E5E1D8] rounded-3xl overflow-hidden">
             <div className="lg:col-span-6 p-6 sm:p-10 lg:p-12 flex flex-col justify-center">
               <p className="text-xs font-semibold tracking-wide text-[#1B3B2B] mb-3">
@@ -359,7 +359,33 @@ export default function App() {
             </div>
           </div>
 
-          {/* 4-column Singapore Delivery Strip directly below hero */}
+          {/* Strategic New Member Offer Spotlight — Prominent Green Border with White Words */}
+          <div className="mt-5 rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-5 sm:p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold tracking-wide text-white/90">
+                New Member Offer · Valid till 31st Dec
+              </p>
+              <h2 className="font-display text-xl sm:text-2xl font-semibold text-white leading-snug">
+                Join BellyBellyGood today and get a $20 welcome voucher
+              </h2>
+              <p className="text-sm text-white/90 tabular-nums">
+                Instant $20 off your order with code WELCOME20 · {totalSignUps}{' '}
+                {totalSignUps === 1 ? 'member' : 'members'} signed up
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
+                className="min-h-[48px] px-6 py-3 rounded-xl border-2 border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0"
+              >
+                {currentMember ? 'View My $20 Voucher' : 'Sign Up & Claim $20'}
+              </button>
+            </div>
+          </div>
+
+          {/* 4-column Singapore Delivery Strip */}
           <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-white border border-[#E5E1D8] rounded-2xl p-4">
               <p className="text-xs text-zinc-500">Islandwide Delivery</p>
@@ -379,16 +405,12 @@ export default function App() {
                 Thermal bag + ice packs
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
-              className="bg-white border border-[#E5E1D8] hover:border-[#5D2E6D] rounded-2xl p-4 text-left transition-colors"
-            >
-              <p className="text-xs text-zinc-500">New Member Offer · Till 31 Dec</p>
-              <p className="mt-1 text-sm font-semibold text-[#441E52] tabular-nums">
-                $20 Voucher · {totalSignUps} Sign-Ups
+            <div className="bg-white border border-[#E5E1D8] rounded-2xl p-4">
+              <p className="text-xs text-zinc-500">Outlet Self-Pickup</p>
+              <p className="mt-1 text-sm font-semibold text-zinc-900">
+                5 Singapore cafés · Free
               </p>
-            </button>
+            </div>
           </div>
         </section>
 
