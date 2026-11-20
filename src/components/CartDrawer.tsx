@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   ArrowLeft,
+  Award,
   CheckCircle2,
   MapPin,
   Minus,
@@ -25,7 +26,14 @@ interface CartDrawerProps {
   onRemoveItem: (cartId: string) => void;
   onClearCart: () => void;
   onOpenSignUp: () => void;
-  onRedeemVoucher: (memberId: string) => void;
+  onCompleteMemberOrder: (
+    memberId: string,
+    options: {
+      usedWelcomeVoucher: boolean;
+      usedPointsReward: boolean;
+      pointsEarned: number;
+    }
+  ) => void;
 }
 
 type CheckoutStep = 'bag' | 'checkout' | 'confirmed';
@@ -35,7 +43,10 @@ interface ConfirmedOrder {
   fulfillment: 'delivery' | 'pickup';
   slotOrOutlet: string;
   total: number;
-  discountApplied: number;
+  voucherDiscountApplied: number;
+  pointsDiscountApplied: number;
+  pointsEarned: number;
+  newPointsBalance: number | null;
   customerName: string;
   addressSummary: string;
   paymentMethod: string;
@@ -51,7 +62,7 @@ export function CartDrawer({
   onRemoveItem,
   onClearCart,
   onOpenSignUp,
-  onRedeemVoucher,
+  onCompleteMemberOrder,
 }: CartDrawerProps) {
   const [step, setStep] = useState<CheckoutStep>('bag');
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
@@ -59,6 +70,7 @@ export function CartDrawer({
   const [pickupOutlet, setPickupOutlet] = useState<string>(PICKUP_OUTLETS[0]);
   const [isRemoteZone, setIsRemoteZone] = useState<boolean>(false);
   const [applyMemberVoucher, setApplyMemberVoucher] = useState<boolean>(true);
+  const [applyPointsReward, setApplyPointsReward] = useState<boolean>(true);
 
   // Checkout form fields
   const [fullName, setFullName] = useState<string>('');
@@ -81,12 +93,21 @@ export function CartDrawer({
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const totalCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const deliveryFee = calculateDeliveryFee(subtotal, fulfillment, isRemoteZone);
+
   const canUseVoucher = Boolean(currentMember && !currentMember.voucherUsed && subtotal > 0);
   const voucherDiscount =
     canUseVoucher && applyMemberVoucher
       ? Math.min(currentMember!.voucherAmount, subtotal)
       : 0;
-  const grandTotal = Math.max(0, subtotal - voucherDiscount + deliveryFee);
+
+  const memberPoints = currentMember?.points ?? 0;
+  const prePointsTotal = Math.max(0, subtotal - voucherDiscount + deliveryFee);
+  const canUsePointsReward = Boolean(currentMember && memberPoints >= 10 && prePointsTotal > 0);
+  const pointsDiscount =
+    canUsePointsReward && applyPointsReward ? Math.min(10, prePointsTotal) : 0;
+
+  const grandTotal = Math.max(0, prePointsTotal - pointsDiscount);
+  const pointsEarnedOnOrder = currentMember ? Math.floor(grandTotal / 10) : 0;
 
   let tierHint = '';
   let tierProgress = 0;
@@ -132,8 +153,18 @@ export function CartDrawer({
       }
     }
 
-    if (voucherDiscount > 0 && currentMember) {
-      onRedeemVoucher(currentMember.id);
+    const usedVoucher = voucherDiscount > 0;
+    const usedPoints = pointsDiscount > 0;
+    let updatedBalance: number | null = null;
+
+    if (currentMember) {
+      updatedBalance =
+        Math.max(0, currentMember.points - (usedPoints ? 10 : 0)) + pointsEarnedOnOrder;
+      onCompleteMemberOrder(currentMember.id, {
+        usedWelcomeVoucher: usedVoucher,
+        usedPointsReward: usedPoints,
+        pointsEarned: pointsEarnedOnOrder,
+      });
     }
 
     const orderNum = `BBG-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -142,7 +173,10 @@ export function CartDrawer({
       fulfillment,
       slotOrOutlet: fulfillment === 'delivery' ? deliverySlot : pickupOutlet,
       total: grandTotal,
-      discountApplied: voucherDiscount,
+      voucherDiscountApplied: voucherDiscount,
+      pointsDiscountApplied: pointsDiscount,
+      pointsEarned: pointsEarnedOnOrder,
+      newPointsBalance: updatedBalance,
       customerName: fullName.trim(),
       addressSummary:
         fulfillment === 'delivery'
@@ -243,11 +277,19 @@ export function CartDrawer({
                 <span className="text-zinc-500">Payment</span>
                 <span className="font-medium text-zinc-900 text-right">{confirmedOrder.paymentMethod}</span>
               </div>
-              {confirmedOrder.discountApplied > 0 && (
+              {confirmedOrder.voucherDiscountApplied > 0 && (
                 <div className="flex justify-between gap-4 text-[#1B3B2B]">
                   <span>New Member Voucher</span>
                   <span className="font-semibold tabular-nums">
-                    -${confirmedOrder.discountApplied.toFixed(2)}
+                    -${confirmedOrder.voucherDiscountApplied.toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {confirmedOrder.pointsDiscountApplied > 0 && (
+                <div className="flex justify-between gap-4 text-[#1B3B2B]">
+                  <span>10-Point Reward Redeemed</span>
+                  <span className="font-semibold tabular-nums">
+                    -${confirmedOrder.pointsDiscountApplied.toFixed(2)}
                   </span>
                 </div>
               )}
@@ -258,6 +300,23 @@ export function CartDrawer({
                 </span>
               </div>
             </div>
+
+            {confirmedOrder.newPointsBalance !== null && (
+              <div className="rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-4 text-white flex items-center justify-between gap-3">
+                <div className="text-xs">
+                  <p className="font-semibold text-sm">
+                    +{confirmedOrder.pointsEarned} {confirmedOrder.pointsEarned === 1 ? 'point' : 'points'} earned
+                  </p>
+                  <p className="text-white/85 mt-0.5">
+                    1 point per $10 spent · 10 points = $10 off
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[11px] text-white/80">Card Balance</p>
+                  <p className="text-lg font-bold tabular-nums">{confirmedOrder.newPointsBalance} pts</p>
+                </div>
+              </div>
+            )}
 
             <div className="bg-[#E8EFEA] rounded-2xl p-4 flex items-start gap-3 text-xs text-[#1B3B2B]">
               <Snowflake className="w-4 h-4 shrink-0 mt-0.5" />
@@ -322,30 +381,68 @@ export function CartDrawer({
                 </button>
               </div>
 
-              {/* Member $20 Voucher Callout */}
-              {canUseVoucher ? (
-                <label className="bg-[#E8EFEA] border border-[#1B3B2B]/15 rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
-                  <div className="flex items-center gap-2.5">
-                    <Ticket className="w-4 h-4 text-[#1B3B2B] shrink-0" />
-                    <div className="text-xs">
-                      <p className="font-semibold text-[#1B3B2B]">
-                        Apply $20 New Member Voucher (WELCOME20)
-                      </p>
-                      <p className="text-[#1B3B2B]/80">Valid till 31st Dec</p>
+              {/* Member Rewards: $20 Welcome Voucher + 10-Point $10 Off Redemption */}
+              {currentMember ? (
+                <div className="space-y-2.5">
+                  {canUseVoucher && (
+                    <label className="bg-[#E8EFEA] border border-[#1B3B2B]/15 rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+                      <div className="flex items-center gap-2.5">
+                        <Ticket className="w-4 h-4 text-[#1B3B2B] shrink-0" />
+                        <div className="text-xs">
+                          <p className="font-semibold text-[#1B3B2B]">
+                            Apply $20 New Member Voucher (WELCOME20)
+                          </p>
+                          <p className="text-[#1B3B2B]/80">Valid till 31st Dec</p>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={applyMemberVoucher}
+                        onChange={(e) => setApplyMemberVoucher(e.target.checked)}
+                        className="w-4 h-4 rounded accent-[#1B3B2B]"
+                      />
+                    </label>
+                  )}
+
+                  {canUsePointsReward ? (
+                    <label className="bg-[#14532D] border-2 border-[#22C55E] rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer text-white">
+                      <div className="flex items-center gap-2.5">
+                        <Award className="w-4 h-4 text-[#4ADE80] shrink-0" />
+                        <div className="text-xs">
+                          <p className="font-semibold text-white">
+                            Redeem 10 Points for $10.00 Off Total
+                          </p>
+                          <p className="text-white/80 tabular-nums">
+                            Available balance: {memberPoints} pts
+                          </p>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={applyPointsReward}
+                        onChange={(e) => setApplyPointsReward(e.target.checked)}
+                        className="w-4 h-4 rounded accent-[#22C55E]"
+                      />
+                    </label>
+                  ) : (
+                    <div className="bg-white border border-[#E5E1D8] rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2.5 text-zinc-700">
+                        <Award className="w-4 h-4 text-[#1B3B2B] shrink-0" />
+                        <span>
+                          You’ll earn <strong className="tabular-nums">{pointsEarnedOnOrder} {pointsEarnedOnOrder === 1 ? 'pt' : 'pts'}</strong> on this order (1 pt per $10)
+                        </span>
+                      </div>
+                      <span className="font-semibold tabular-nums text-[#1B3B2B] shrink-0">
+                        {memberPoints}/10 pts
+                      </span>
                     </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={applyMemberVoucher}
-                    onChange={(e) => setApplyMemberVoucher(e.target.checked)}
-                    className="w-4 h-4 rounded accent-[#1B3B2B]"
-                  />
-                </label>
-              ) : !currentMember ? (
+                  )}
+                </div>
+              ) : (
                 <div className="bg-white border border-[#E5E1D8] rounded-2xl p-3.5 flex items-center justify-between gap-3">
                   <div className="text-xs">
                     <p className="font-semibold text-zinc-900">New members get $20 voucher</p>
-                    <p className="text-zinc-500">Offer valid till 31st Dec</p>
+                    <p className="text-zinc-500">Plus earn 1 pt per $10 (10 pts = $10 off)</p>
                   </div>
                   <button
                     type="button"
@@ -355,7 +452,7 @@ export function CartDrawer({
                     Sign Up
                   </button>
                 </div>
-              ) : null}
+              )}
 
               {/* Delivery fee tier progress */}
               <div className="bg-white border border-[#E5E1D8] rounded-2xl p-4 space-y-2.5">
@@ -527,6 +624,12 @@ export function CartDrawer({
                     {deliveryFee === 0 ? 'FREE' : `$${deliveryFee.toFixed(2)}`}
                   </span>
                 </div>
+                {pointsDiscount > 0 && (
+                  <div className="flex justify-between text-[#1B3B2B]">
+                    <span>10-Point Membership Reward</span>
+                    <span className="tabular-nums font-semibold">-${pointsDiscount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-base font-bold text-zinc-900 pt-1.5 border-t border-[#E5E1D8]">
                   <span>Total (SGD)</span>
                   <span className="tabular-nums text-[#441E52]">${grandTotal.toFixed(2)}</span>

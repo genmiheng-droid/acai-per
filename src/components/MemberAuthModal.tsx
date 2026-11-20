@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Award, CheckCircle2, LogOut, Ticket, X } from 'lucide-react';
+import { Award, CheckCircle2, LogOut, Sparkles, Ticket, X } from 'lucide-react';
 
 export interface MemberAccount {
   id: string;
@@ -10,6 +10,7 @@ export interface MemberAccount {
   voucherCode: string;
   voucherAmount: number;
   voucherUsed: boolean;
+  points: number;
 }
 
 interface MemberAuthModalProps {
@@ -49,6 +50,11 @@ export function MemberAuthModal({
   }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
+
+  const memberPoints = currentMember?.points ?? 0;
+  const rewardReady = memberPoints >= 10;
+  const pointsProgress = Math.min(100, (memberPoints / 10) * 100);
+  const pointsNeeded = Math.max(0, 10 - memberPoints);
 
   const handleSignUpSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -144,7 +150,51 @@ export function MemberAuthModal({
                 </div>
               )}
 
-              {/* Active Member Voucher Card (Private to the signed-in user) */}
+              {/* BellyBellyGood Membership Card (Name & Points) */}
+              <div className="rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-5 text-white shadow-sm space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-white/80">
+                      BellyBellyGood Member Card
+                    </p>
+                    <p className="font-display text-xl font-semibold text-white mt-1">
+                      {currentMember.name}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[11px] text-white/80">Points Balance</p>
+                    <p className="text-2xl font-bold tabular-nums text-white leading-tight">
+                      {memberPoints} <span className="text-sm font-medium">pts</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="h-2 w-full rounded-full bg-white/20 overflow-hidden">
+                    <div
+                      className="h-full bg-[#4ADE80] transition-all duration-300"
+                      style={{ width: `${pointsProgress}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-white/90 tabular-nums">
+                    <span>Every $10 spent = 1 point</span>
+                    <span>
+                      {rewardReady
+                        ? '10 pts reached · $10 off unlocked'
+                        : `${pointsNeeded} more ${pointsNeeded === 1 ? 'pt' : 'pts'} for $10 off`}
+                    </span>
+                  </div>
+                </div>
+
+                {rewardReady && (
+                  <div className="px-3 py-2 rounded-xl bg-[#166534] border border-[#4ADE80] text-xs font-medium text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span>10 points ready — redeem $10.00 off your total price in your bag.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Active Member Voucher Card */}
               <div className="bg-white border border-[#E5E1D8] rounded-2xl p-5 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -236,7 +286,7 @@ export function MemberAuthModal({
                   <div className="p-3.5 rounded-xl bg-[#E8EFEA] text-xs text-[#1B3B2B] flex items-start gap-2.5">
                     <Award className="w-4 h-4 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
-                      New members receive a <span className="font-semibold">$20.00 voucher</span> immediately upon sign-up. Offer valid till 31st Dec.
+                      New members receive a <span className="font-semibold">$20.00 voucher</span> (valid till 31st Dec) plus a Membership Card that earns <span className="font-semibold">1 point per $10 spent</span> (10 points = $10 off).
                     </p>
                   </div>
 

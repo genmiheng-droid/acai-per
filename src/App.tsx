@@ -45,7 +45,19 @@ export default function App() {
   const [members, setMembers] = useState<MemberAccount[]>(() => {
     try {
       const saved = localStorage.getItem(MEMBERS_STORAGE_KEY);
-      return saved ? (JSON.parse(saved) as MemberAccount[]) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved) as Partial<MemberAccount>[];
+      return parsed.map((m) => ({
+        id: m.id || `mem-${Date.now()}`,
+        name: m.name || 'Member',
+        email: m.email || '',
+        phone: m.phone || '',
+        joinedAt: m.joinedAt || new Date().toISOString(),
+        voucherCode: m.voucherCode || 'WELCOME20',
+        voucherAmount: m.voucherAmount ?? 20,
+        voucherUsed: Boolean(m.voucherUsed),
+        points: typeof m.points === 'number' ? m.points : 0,
+      }));
     } catch {
       return [];
     }
@@ -171,6 +183,7 @@ export default function App() {
       voucherCode: 'WELCOME20',
       voucherAmount: 20,
       voucherUsed: false,
+      points: 0,
     };
 
     setMembers((prev) => [newMember, ...prev]);
@@ -192,9 +205,25 @@ export default function App() {
     setCurrentMemberId(null);
   };
 
-  const handleRedeemVoucher = (memberId: string) => {
+  const handleCompleteMemberOrder = (
+    memberId: string,
+    options: {
+      usedWelcomeVoucher: boolean;
+      usedPointsReward: boolean;
+      pointsEarned: number;
+    }
+  ) => {
     setMembers((prev) =>
-      prev.map((m) => (m.id === memberId ? { ...m, voucherUsed: true } : m))
+      prev.map((m) => {
+        if (m.id !== memberId) return m;
+        const currentPts = m.points ?? 0;
+        const afterRedeem = Math.max(0, currentPts - (options.usedPointsReward ? 10 : 0));
+        return {
+          ...m,
+          voucherUsed: m.voucherUsed || options.usedWelcomeVoucher,
+          points: afterRedeem + options.pointsEarned,
+        };
+      })
     );
   };
 
@@ -214,110 +243,112 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col pb-20 md:pb-0">
-      {/* Prominent Dismissible Top Sign-Up Banner (matches middle green offer spotlight) */}
-      {showPromoBanner && (
-        <div className="bg-[#FAF9F6] pt-3 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-4 sm:p-5 text-white shadow-sm relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 pr-12">
-            <div className="space-y-0.5">
-              <p className="text-xs font-semibold tracking-wide text-white/90">
-                New Member Offer · Valid till 31st Dec
-              </p>
-              <p className="font-display text-lg sm:text-xl font-semibold text-white leading-snug">
-                New members get $20 voucher on your first BellyBellyGood order
-              </p>
+      {/* Locked Sticky Header Stack: Fixed New Members Offer Banner + Top Bar */}
+      <div className="sticky top-0 z-30">
+        {showPromoBanner && (
+          <div className="bg-[#FAF9F6]/95 backdrop-blur-md pt-2 px-3 sm:px-6 lg:px-8 pb-2 border-b border-[#E5E1D8]/60">
+            <div className="max-w-7xl mx-auto rounded-2xl bg-[#14532D] border-2 border-[#22C55E] px-4 py-2.5 sm:px-5 sm:py-3.5 text-white shadow-sm relative flex items-center justify-between gap-3 pr-11">
+              <div className="min-w-0">
+                <p className="text-[11px] sm:text-xs font-semibold tracking-wide text-white/90 truncate">
+                  New Member Offer · Valid till 31st Dec
+                </p>
+                <p className="font-display text-sm sm:text-lg font-semibold text-white leading-snug truncate">
+                  New members get $20 voucher on your first BellyBellyGood order
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openMemberModal(currentMember ? 'account' : 'signup')}
+                className="min-h-[40px] px-3.5 sm:px-5 py-2 rounded-xl border-2 border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] text-white text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-colors"
+              >
+                {currentMember ? 'My Card' : 'Sign Up & Claim $20'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPromoBanner(false)}
+                aria-label="Dismiss promotion banner"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => openMemberModal('signup')}
-              className="self-start sm:self-auto min-h-[44px] px-5 py-2.5 rounded-xl border-2 border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors"
-            >
-              {currentMember ? 'View My $20 Voucher' : 'Sign Up & Claim $20'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPromoBanner(false)}
-              aria-label="Dismiss promotion banner"
-              className="absolute right-2.5 top-2.5 w-9 h-9 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Top Bar: Brand — Nav Links — Member Sign In (top right) + Bag */}
-      <header className="sticky top-0 z-30 h-[54px] md:h-16 bg-[#FAF9F6]/95 backdrop-blur-md border-b border-[#E5E1D8]">
-        <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 md:gap-8">
-          <a
-            href="#top"
-            className="font-display text-xl md:text-2xl font-semibold tracking-tight text-[#1B3B2B] whitespace-nowrap shrink-0"
-          >
-            BellyBellyGood
-          </a>
-
-          <nav
-            aria-label="Primary menu navigation"
-            className="hidden md:flex items-center gap-7 text-sm font-medium text-zinc-600"
-          >
-            <button
-              type="button"
-              onClick={() => navigateToCategory('signature')}
-              className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
-            >
-              Signature Bowls
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateToCategory('make-your-own')}
-              className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
-            >
-              Make Your Own
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateToCategory('pints')}
-              className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
-            >
-              Take-Home Pints
-            </button>
+        {/* Top Bar: Brand — Nav Links — Member Sign In (top right) + Bag */}
+        <header className="h-[54px] md:h-16 bg-[#FAF9F6]/95 backdrop-blur-md border-b border-[#E5E1D8]">
+          <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 md:gap-8">
             <a
-              href="#delivery-info"
-              className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
+              href="#top"
+              className="font-display text-xl md:text-2xl font-semibold tracking-tight text-[#1B3B2B] whitespace-nowrap shrink-0"
             >
-              Delivery Info
+              BellyBellyGood
             </a>
-          </nav>
 
-          {/* Top Right Hand Corner: Member Sign-In + Bag */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={() => openMemberModal(currentMember ? 'account' : 'signin')}
-              className="min-h-[40px] px-3 py-2 rounded-xl border border-[#E5E1D8] bg-white hover:bg-[#F3F1EC] text-zinc-900 text-xs sm:text-sm font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            <nav
+              aria-label="Primary menu navigation"
+              className="hidden md:flex items-center gap-7 text-sm font-medium text-zinc-600"
             >
-              <User className="w-4 h-4 text-[#5D2E6D]" />
-              <span>
-                {currentMember
-                  ? `${currentMember.name.split(' ')[0]}${!currentMember.voucherUsed ? ' · $20' : ''}`
-                  : 'Member Sign In'}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => navigateToCategory('signature')}
+                className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
+              >
+                Signature Bowls
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateToCategory('make-your-own')}
+                className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
+              >
+                Make Your Own
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateToCategory('pints')}
+                className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
+              >
+                Take-Home Pints
+              </button>
+              <a
+                href="#delivery-info"
+                className="hover:text-[#5D2E6D] transition-colors whitespace-nowrap shrink-0"
+              >
+                Delivery Info
+              </a>
+            </nav>
 
-            <button
-              type="button"
-              onClick={() => setIsCartOpen(true)}
-              className="hidden md:inline-flex min-h-[40px] px-4 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-xs sm:text-sm font-semibold items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Bag</span>
-              <span className="tabular-nums">
-                ({totalBagCount})
-                {bagSubtotal > 0 ? ` · $${bagSubtotal.toFixed(2)}` : ''}
-              </span>
-            </button>
+            {/* Top Right Hand Corner: Member Sign-In + Bag */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => openMemberModal(currentMember ? 'account' : 'signin')}
+                className="min-h-[40px] px-3 py-2 rounded-xl border border-[#E5E1D8] bg-white hover:bg-[#F3F1EC] text-zinc-900 text-xs sm:text-sm font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+              >
+                <User className="w-4 h-4 text-[#5D2E6D]" />
+                <span className="tabular-nums">
+                  {currentMember
+                    ? `${currentMember.name.split(' ')[0]} · ${currentMember.points ?? 0} pts`
+                    : 'Member Sign In'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className="hidden md:inline-flex min-h-[40px] px-4 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-xs sm:text-sm font-semibold items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Bag</span>
+                <span className="tabular-nums">
+                  ({totalBagCount})
+                  {bagSubtotal > 0 ? ` · $${bagSubtotal.toFixed(2)}` : ''}
+                </span>
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
       <main id="top" className="flex-1">
         {/* Hero Split */}
@@ -753,7 +784,7 @@ export default function App() {
           setIsCartOpen(false);
           openMemberModal('signup');
         }}
-        onRedeemVoucher={handleRedeemVoucher}
+        onCompleteMemberOrder={handleCompleteMemberOrder}
       />
 
       {/* Member Sign-In / Sign-Up Modal */}
