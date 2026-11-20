@@ -6,7 +6,7 @@ import {
   MapPin,
   Minus,
   Plus,
-  ShoppingBag,
+  ShoppingCart,
   Snowflake,
   Ticket,
   Trash2,
@@ -16,6 +16,8 @@ import {
 import { calculateDeliveryFee, CartItem, PICKUP_OUTLETS } from '../data/menu';
 import { MemberAccount } from './MemberAuthModal';
 import { ResilientImage } from './ResilientImage';
+
+const SINGAPORE_GST_RATE = 0.09;
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -36,12 +38,15 @@ interface CartDrawerProps {
   ) => void;
 }
 
-type CheckoutStep = 'bag' | 'checkout' | 'confirmed';
+type CheckoutStep = 'cart' | 'checkout' | 'confirmed';
 
 interface ConfirmedOrder {
   orderNumber: string;
   fulfillment: 'delivery' | 'pickup';
   slotOrOutlet: string;
+  subtotal: number;
+  deliveryFee: number;
+  gstAmount: number;
   total: number;
   voucherDiscountApplied: number;
   pointsDiscountApplied: number;
@@ -64,7 +69,7 @@ export function CartDrawer({
   onOpenSignUp,
   onCompleteMemberOrder,
 }: CartDrawerProps) {
-  const [step, setStep] = useState<CheckoutStep>('bag');
+  const [step, setStep] = useState<CheckoutStep>('cart');
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
   const [deliverySlot, setDeliverySlot] = useState<string>('Next-Day (12:00 PM – 4:00 PM)');
   const [pickupOutlet, setPickupOutlet] = useState<string>(PICKUP_OUTLETS[0]);
@@ -88,6 +93,14 @@ export function CartDrawer({
     }
   }, [currentMember, fullName, phone]);
 
+  // Reset to cart view automatically if user adds items after completing a previous order
+  useEffect(() => {
+    if (items.length > 0 && step === 'confirmed') {
+      setStep('cart');
+      setConfirmedOrder(null);
+    }
+  }, [items.length, step]);
+
   if (!isOpen) return null;
 
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
@@ -106,8 +119,10 @@ export function CartDrawer({
   const pointsDiscount =
     canUsePointsReward && applyPointsReward ? Math.min(10, prePointsTotal) : 0;
 
-  const grandTotal = Math.max(0, prePointsTotal - pointsDiscount);
-  const pointsEarnedOnOrder = currentMember ? Math.floor(grandTotal / 10) : 0;
+  const taxableTotal = Math.max(0, prePointsTotal - pointsDiscount);
+  const gstAmount = Number((taxableTotal * SINGAPORE_GST_RATE).toFixed(2));
+  const grandTotal = Number((taxableTotal + gstAmount).toFixed(2));
+  const pointsEarnedOnOrder = Math.floor(grandTotal / 10);
 
   let tierHint = '';
   let tierProgress = 0;
@@ -172,6 +187,9 @@ export function CartDrawer({
       orderNumber: orderNum,
       fulfillment,
       slotOrOutlet: fulfillment === 'delivery' ? deliverySlot : pickupOutlet,
+      subtotal,
+      deliveryFee,
+      gstAmount,
       total: grandTotal,
       voucherDiscountApplied: voucherDiscount,
       pointsDiscountApplied: pointsDiscount,
@@ -191,7 +209,7 @@ export function CartDrawer({
 
   const handleCloseDrawer = () => {
     if (step === 'confirmed') {
-      setStep('bag');
+      setStep('cart');
       setConfirmedOrder(null);
     }
     onClose();
@@ -202,7 +220,7 @@ export function CartDrawer({
       className="fixed inset-0 z-50 flex justify-end bg-black/45 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
-      aria-label="Shopping Bag and Delivery Checkout"
+      aria-label="Shopping Cart and Delivery Checkout"
       onClick={handleCloseDrawer}
     >
       <div
@@ -215,16 +233,16 @@ export function CartDrawer({
             {step === 'checkout' && (
               <button
                 type="button"
-                onClick={() => setStep('bag')}
-                aria-label="Back to bag"
+                onClick={() => setStep('cart')}
+                aria-label="Back to cart"
                 className="w-10 h-10 -ml-2 rounded-full flex items-center justify-center text-zinc-700 hover:bg-[#F3F1EC]"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <h2 className="font-display text-xl font-semibold text-zinc-900">
-              {step === 'bag' && `Your Bag (${totalCount})`}
-              {step === 'checkout' && 'Singapore Delivery Details'}
+              {step === 'cart' && `Your Cart (${totalCount})`}
+              {step === 'checkout' && 'Payment & Delivery Checkout'}
               {step === 'confirmed' && 'Order Confirmed'}
             </h2>
           </div>
@@ -232,7 +250,7 @@ export function CartDrawer({
           <button
             type="button"
             onClick={handleCloseDrawer}
-            aria-label="Close bag"
+            aria-label="Close cart"
             className="w-11 h-11 rounded-full flex items-center justify-center text-zinc-600 hover:bg-[#F3F1EC] hover:text-zinc-900"
           >
             <X className="w-5 h-5" />
@@ -256,6 +274,56 @@ export function CartDrawer({
               </p>
             </div>
 
+            {/* Loyalty Points Summary Card shown after checkout is completed */}
+            <div className="rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-5 text-white space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Award className="w-5 h-5 text-[#4ADE80] shrink-0" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/90">
+                    Loyalty Points
+                  </span>
+                </div>
+                <span className="text-xs text-white/85">1 pt per $10 · 10 pts = $10 off</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="rounded-xl bg-[#166534] border border-[#4ADE80]/50 p-3">
+                  <p className="text-[11px] text-white/85">Points Earned</p>
+                  <p className="text-xl font-bold tabular-nums text-white mt-0.5">
+                    +{confirmedOrder.pointsEarned}{' '}
+                    <span className="text-xs font-medium">
+                      {confirmedOrder.pointsEarned === 1 ? 'pt' : 'pts'}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-[#166534] border border-[#4ADE80]/50 p-3">
+                  <p className="text-[11px] text-white/85">
+                    {confirmedOrder.newPointsBalance !== null ? 'Total Points Balance' : 'Member Status'}
+                  </p>
+                  {confirmedOrder.newPointsBalance !== null ? (
+                    <p className="text-xl font-bold tabular-nums text-white mt-0.5">
+                      {confirmedOrder.newPointsBalance}{' '}
+                      <span className="text-xs font-medium">
+                        {confirmedOrder.newPointsBalance === 1 ? 'pt' : 'pts'}
+                      </span>
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleCloseDrawer();
+                        onOpenSignUp();
+                      }}
+                      className="mt-1 text-xs font-semibold underline underline-offset-2 text-white text-left"
+                    >
+                      Join to save points
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white border border-[#E5E1D8] rounded-2xl p-5 space-y-3 text-sm">
               <div className="flex justify-between gap-4">
                 <span className="text-zinc-500">Fulfillment</span>
@@ -277,46 +345,46 @@ export function CartDrawer({
                 <span className="text-zinc-500">Payment</span>
                 <span className="font-medium text-zinc-900 text-right">{confirmedOrder.paymentMethod}</span>
               </div>
-              {confirmedOrder.voucherDiscountApplied > 0 && (
-                <div className="flex justify-between gap-4 text-[#1B3B2B]">
-                  <span>New Member Voucher</span>
-                  <span className="font-semibold tabular-nums">
-                    -${confirmedOrder.voucherDiscountApplied.toFixed(2)}
+
+              <div className="pt-3 border-t border-[#E5E1D8] space-y-2">
+                <div className="flex justify-between gap-4 text-zinc-600">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">${confirmedOrder.subtotal.toFixed(2)}</span>
+                </div>
+                {confirmedOrder.voucherDiscountApplied > 0 && (
+                  <div className="flex justify-between gap-4 text-[#1B3B2B]">
+                    <span>New Member Voucher</span>
+                    <span className="font-semibold tabular-nums">
+                      -${confirmedOrder.voucherDiscountApplied.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-4 text-zinc-600">
+                  <span>Delivery</span>
+                  <span className="tabular-nums">
+                    {confirmedOrder.deliveryFee === 0 ? 'FREE' : `$${confirmedOrder.deliveryFee.toFixed(2)}`}
                   </span>
                 </div>
-              )}
-              {confirmedOrder.pointsDiscountApplied > 0 && (
-                <div className="flex justify-between gap-4 text-[#1B3B2B]">
-                  <span>10-Point Reward Redeemed</span>
-                  <span className="font-semibold tabular-nums">
-                    -${confirmedOrder.pointsDiscountApplied.toFixed(2)}
+                {confirmedOrder.pointsDiscountApplied > 0 && (
+                  <div className="flex justify-between gap-4 text-[#1B3B2B]">
+                    <span>10-Point Reward Redeemed</span>
+                    <span className="font-semibold tabular-nums">
+                      -${confirmedOrder.pointsDiscountApplied.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-4 text-zinc-600">
+                  <span>GST (9%)</span>
+                  <span className="tabular-nums">${confirmedOrder.gstAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between gap-4 pt-2 border-t border-[#E5E1D8]">
+                  <span className="font-semibold text-zinc-900">Total Paid</span>
+                  <span className="font-bold tabular-nums text-[#441E52]">
+                    ${confirmedOrder.total.toFixed(2)}
                   </span>
                 </div>
-              )}
-              <div className="flex justify-between gap-4 pt-3 border-t border-[#E5E1D8]">
-                <span className="font-semibold text-zinc-900">Total Paid</span>
-                <span className="font-bold tabular-nums text-[#441E52]">
-                  ${confirmedOrder.total.toFixed(2)}
-                </span>
               </div>
             </div>
-
-            {confirmedOrder.newPointsBalance !== null && (
-              <div className="rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-4 text-white flex items-center justify-between gap-3">
-                <div className="text-xs">
-                  <p className="font-semibold text-sm">
-                    +{confirmedOrder.pointsEarned} {confirmedOrder.pointsEarned === 1 ? 'point' : 'points'} earned
-                  </p>
-                  <p className="text-white/85 mt-0.5">
-                    1 point per $10 spent · 10 points = $10 off
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[11px] text-white/80">Card Balance</p>
-                  <p className="text-lg font-bold tabular-nums">{confirmedOrder.newPointsBalance} pts</p>
-                </div>
-              </div>
-            )}
 
             <div className="bg-[#E8EFEA] rounded-2xl p-4 flex items-start gap-3 text-xs text-[#1B3B2B]">
               <Snowflake className="w-4 h-4 shrink-0 mt-0.5" />
@@ -336,9 +404,9 @@ export function CartDrawer({
         ) : items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
             <div className="w-14 h-14 rounded-2xl bg-[#F3F1EC] flex items-center justify-center text-zinc-500 mb-4">
-              <ShoppingBag className="w-6 h-6" strokeWidth={1.75} />
+              <ShoppingCart className="w-6 h-6" strokeWidth={1.75} />
             </div>
-            <h3 className="font-display text-xl font-semibold text-zinc-900">Your bag is empty</h3>
+            <h3 className="font-display text-xl font-semibold text-zinc-900">Your cart is empty</h3>
             <p className="text-sm text-zinc-600 mt-1.5 max-w-xs">
               Explore BellyBellyGood Signature Bowls, Build Your Own, or Take-Home Pints for islandwide Singapore delivery.
             </p>
@@ -350,7 +418,7 @@ export function CartDrawer({
               Browse Menu
             </button>
           </div>
-        ) : step === 'bag' ? (
+        ) : step === 'cart' ? (
           <>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
               {/* Fulfillment toggle */}
@@ -603,7 +671,7 @@ export function CartDrawer({
               </div>
             </div>
 
-            {/* Footer totals */}
+            {/* Footer totals with GST (9%) */}
             <div className="bg-white border-t border-[#E5E1D8] px-5 py-4 space-y-3 shrink-0">
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between text-zinc-600">
@@ -630,6 +698,10 @@ export function CartDrawer({
                     <span className="tabular-nums font-semibold">-${pointsDiscount.toFixed(2)}</span>
                   </div>
                 )}
+                <div className="flex justify-between text-zinc-600">
+                  <span>GST (9%)</span>
+                  <span className="tabular-nums font-medium">${gstAmount.toFixed(2)}</span>
+                </div>
                 <div className="flex justify-between text-base font-bold text-zinc-900 pt-1.5 border-t border-[#E5E1D8]">
                   <span>Total (SGD)</span>
                   <span className="tabular-nums text-[#441E52]">${grandTotal.toFixed(2)}</span>
@@ -647,7 +719,7 @@ export function CartDrawer({
             </div>
           </>
         ) : (
-          /* Checkout Form */
+          /* Checkout Form with Payment Summary + GST */
           <form onSubmit={handlePlaceOrder} className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
               {formError && (
@@ -746,6 +818,41 @@ export function CartDrawer({
                       {method}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Payment Breakdown with GST (9%) */}
+              <div className="bg-white border border-[#E5E1D8] rounded-2xl p-4 space-y-2 text-xs">
+                <p className="font-semibold text-zinc-900 text-sm mb-1">Payment Summary</p>
+                <div className="flex justify-between text-zinc-600">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                </div>
+                {voucherDiscount > 0 && (
+                  <div className="flex justify-between text-[#1B3B2B]">
+                    <span>New Member Voucher (WELCOME20)</span>
+                    <span className="tabular-nums font-semibold">-${voucherDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-zinc-600">
+                  <span>{fulfillment === 'delivery' ? 'Delivery Fee' : 'Outlet Pickup'}</span>
+                  <span className="tabular-nums">
+                    {deliveryFee === 0 ? 'FREE' : `$${deliveryFee.toFixed(2)}`}
+                  </span>
+                </div>
+                {pointsDiscount > 0 && (
+                  <div className="flex justify-between text-[#1B3B2B]">
+                    <span>10-Point Membership Reward</span>
+                    <span className="tabular-nums font-semibold">-${pointsDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-zinc-600">
+                  <span>GST (9%)</span>
+                  <span className="tabular-nums">${gstAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-zinc-900 pt-2 border-t border-[#E5E1D8]">
+                  <span>Total Payable (SGD)</span>
+                  <span className="tabular-nums text-[#441E52]">${grandTotal.toFixed(2)}</span>
                 </div>
               </div>
 

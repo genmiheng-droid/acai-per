@@ -382,10 +382,10 @@ export function BuildYourOwnView({ onAddToCart }: BuildYourOwnViewProps) {
               {justAdded ? (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Added to Bag</span>
+                  <span>Added to Cart</span>
                 </>
               ) : (
-                <span>Add Custom Bowl — ${totalPrice.toFixed(2)}</span>
+                <span>Add to Cart — ${totalPrice.toFixed(2)}</span>
               )}
             </button>
           </div>

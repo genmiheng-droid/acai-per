@@ -4,7 +4,7 @@ import {
   MapPin,
   Plus,
   Search,
-  ShoppingBag,
+  ShoppingCart,
   SlidersHorizontal,
   Snowflake,
   Sparkles,
@@ -147,7 +147,8 @@ export default function App() {
 
   const handleAddToCart = (newItem: CartItem) => {
     setCart((prev) => [...prev, newItem]);
-    showToast(`Added ${newItem.name} to bag`);
+    setIsCartOpen(true);
+    showToast(`Added ${newItem.name} to cart`);
   };
 
   const handleUpdateQty = (cartId: string, delta: number) => {
@@ -338,8 +339,8 @@ export default function App() {
                 onClick={() => setIsCartOpen(true)}
                 className="hidden md:inline-flex min-h-[40px] px-4 py-2 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] text-white text-xs sm:text-sm font-semibold items-center gap-2 transition-colors whitespace-nowrap shrink-0"
               >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Bag</span>
+                <ShoppingCart className="w-4 h-4" />
+                <span>Cart</span>
                 <span className="tabular-nums">
                   ({totalBagCount})
                   {bagSubtotal > 0 ? ` · $${bagSubtotal.toFixed(2)}` : ''}
@@ -729,7 +730,7 @@ export default function App() {
           className="h-full flex flex-col items-center justify-center gap-0.5 text-zinc-700 relative"
         >
           <div className="relative">
-            <ShoppingBag className="w-5 h-5 text-[#5D2E6D]" />
+            <ShoppingCart className="w-5 h-5 text-[#5D2E6D]" />
             {totalBagCount > 0 && (
               <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#5D2E6D] text-white text-[10px] font-bold tabular-nums flex items-center justify-center">
                 {totalBagCount}
@@ -737,12 +738,12 @@ export default function App() {
             )}
           </div>
           <span className="text-[11px] font-semibold tracking-tight text-[#441E52] tabular-nums">
-            {bagSubtotal > 0 ? `$${bagSubtotal.toFixed(2)}` : 'Bag'}
+            {bagSubtotal > 0 ? `$${bagSubtotal.toFixed(2)}` : 'Cart'}
           </span>
         </button>
       </nav>
 
-      {/* Subtle Add-to-Bag Toast */}
+      {/* Subtle Add-to-Cart Toast */}
       {toastMessage && (
         <div
           role="status"
@@ -759,7 +760,7 @@ export default function App() {
             }}
             className="underline underline-offset-2 text-white/90 hover:text-white ml-1"
           >
-            View Bag
+            View Cart
           </button>
         </div>
       )}
@@ -771,7 +772,7 @@ export default function App() {
         onAddToCart={handleAddToCart}
       />
 
-      {/* Bag & Singapore Delivery Checkout Drawer */}
+      {/* Cart & Singapore Delivery Checkout Drawer */}
       <CartDrawer
         isOpen={isCartOpen}
         items={cart}

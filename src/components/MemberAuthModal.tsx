@@ -144,7 +144,7 @@ export function MemberAuthModal({
                   <div className="text-xs leading-relaxed">
                     <p className="font-semibold text-sm">Membership confirmed</p>
                     <p className="mt-0.5">
-                      Your $20 welcome voucher (WELCOME20) is active and ready to apply in your bag. Offer valid till 31st Dec.
+                      Your $20 welcome voucher (WELCOME20) is active and ready to apply in your cart. Offer valid till 31st Dec.
                     </p>
                   </div>
                 </div>
@@ -189,7 +189,7 @@ export function MemberAuthModal({
                 {rewardReady && (
                   <div className="px-3 py-2 rounded-xl bg-[#166534] border border-[#4ADE80] text-xs font-medium text-white flex items-center gap-2">
                     <Sparkles className="w-4 h-4 shrink-0" />
-                    <span>10 points ready — redeem $10.00 off your total price in your bag.</span>
+                    <span>10 points ready — redeem $10.00 off your total price in your cart.</span>
                   </div>
                 )}
               </div>

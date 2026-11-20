@@ -273,7 +273,7 @@ export function ItemDetailSheet({ item, onClose, onAddToCart }: ItemDetailSheetP
             onClick={handleConfirm}
             className="flex-1 min-h-[48px] px-5 py-3 rounded-xl bg-[#5D2E6D] hover:bg-[#441E52] active:scale-[0.99] text-white text-sm font-semibold flex items-center justify-between transition-all whitespace-nowrap"
           >
-            <span>Add to Bag</span>
+            <span>Add to Cart</span>
             <span className="tabular-nums">${totalPrice.toFixed(2)}</span>
           </button>
         </div>
