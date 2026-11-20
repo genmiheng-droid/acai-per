@@ -95,6 +95,7 @@ export function MemberAuthModal({
     }
     setSignInEmail('');
     setJustSignedUp(false);
+    onClose();
   };
 
   const handleClose = () => {

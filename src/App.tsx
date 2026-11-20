@@ -199,6 +199,14 @@ export default function App() {
       return { ok: false, error: 'No member account found for that email. Sign up to claim your $20 voucher.' };
     }
     setCurrentMemberId(found.id);
+    setMemberModalOpen(false);
+    showToast(`Welcome back, ${found.name.split(' ')[0]} · Choose your açaí below`);
+    setTimeout(() => {
+      const menuEl = document.getElementById('menu-section');
+      if (menuEl) {
+        menuEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
     return { ok: true };
   };
 
@@ -243,7 +251,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col pb-20 md:pb-0">
+    <div
+      className={`min-h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col pb-20 md:pb-0 transition-[padding] duration-200 ${
+        isCartOpen ? 'md:pr-[380px] lg:pr-[420px]' : ''
+      }`}
+    >
       {/* Locked Sticky Header Stack: Fixed New Members Offer Banner + Top Bar */}
       <div className="sticky top-0 z-30">
         {showPromoBanner && (
@@ -536,7 +548,11 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div
+                  className={`grid grid-cols-1 sm:grid-cols-2 gap-6 ${
+                    isCartOpen ? 'lg:grid-cols-2 xl:grid-cols-3' : 'lg:grid-cols-3'
+                  }`}
+                >
                   {filteredItems.map((item) => {
                     const startingPrice = Math.min(...item.sizes.map((s) => s.price));
                     const hasMultipleSizes = item.sizes.length > 1;
@@ -748,20 +764,24 @@ export default function App() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#1B3B2B] text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-3 text-xs font-semibold whitespace-nowrap"
+          className={`fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#1B3B2B] text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-3 text-xs font-semibold whitespace-nowrap ${
+            isCartOpen ? 'md:left-[calc(50%-190px)] lg:left-[calc(50%-210px)]' : ''
+          }`}
         >
           <Check className="w-4 h-4 shrink-0" />
           <span>{toastMessage}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setToastMessage(null);
-              setIsCartOpen(true);
-            }}
-            className="underline underline-offset-2 text-white/90 hover:text-white ml-1"
-          >
-            View Cart
-          </button>
+          {!isCartOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                setToastMessage(null);
+                setIsCartOpen(true);
+              }}
+              className="underline underline-offset-2 text-white/90 hover:text-white ml-1"
+            >
+              View Cart
+            </button>
+          )}
         </div>
       )}
 

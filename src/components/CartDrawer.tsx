@@ -216,15 +216,13 @@ export function CartDrawer({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/45 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
+    <aside
       aria-label="Shopping Cart and Delivery Checkout"
+      className="fixed inset-0 z-50 flex justify-end bg-black/45 backdrop-blur-[2px] md:inset-y-0 md:left-auto md:right-0 md:w-[380px] lg:w-[420px] md:z-40 md:bg-transparent md:backdrop-blur-none"
       onClick={handleCloseDrawer}
     >
       <div
-        className="w-full max-w-md h-full bg-[#FAF9F6] shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-md md:max-w-none h-full bg-[#FAF9F6] shadow-2xl md:shadow-lg md:border-l md:border-[#E5E1D8] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -876,6 +874,6 @@ export function CartDrawer({
           </form>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
