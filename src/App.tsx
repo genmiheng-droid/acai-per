@@ -214,29 +214,34 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#18181B] flex flex-col pb-20 md:pb-0">
-      {/* Slim Dismissible Top Sign-Up Banner (<= 40px height, non-sticky) */}
+      {/* Prominent Dismissible Top Sign-Up Banner (matches middle green offer spotlight) */}
       {showPromoBanner && (
-        <div className="bg-[#14532D] border-y-2 border-[#22C55E] text-white min-h-[40px] px-4 py-1.5 flex items-center justify-center relative">
-          <div className="flex items-center justify-center gap-3 pr-8 text-xs sm:text-sm font-medium text-white">
-            <span className="truncate">
-              New members get $20 voucher · Offer valid till 31st Dec
-            </span>
+        <div className="bg-[#FAF9F6] pt-3 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto rounded-2xl bg-[#14532D] border-2 border-[#22C55E] p-4 sm:p-5 text-white shadow-sm relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 pr-12">
+            <div className="space-y-0.5">
+              <p className="text-xs font-semibold tracking-wide text-white/90">
+                New Member Offer · Valid till 31st Dec
+              </p>
+              <p className="font-display text-lg sm:text-xl font-semibold text-white leading-snug">
+                New members get $20 voucher on your first BellyBellyGood order
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => openMemberModal('signup')}
-              className="px-2.5 py-0.5 rounded-md border border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] font-semibold text-white whitespace-nowrap shrink-0 transition-colors"
+              className="self-start sm:self-auto min-h-[44px] px-5 py-2.5 rounded-xl border-2 border-[#4ADE80] bg-[#166534] hover:bg-[#15803D] text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors"
             >
-              Sign Up
+              {currentMember ? 'View My $20 Voucher' : 'Sign Up & Claim $20'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPromoBanner(false)}
+              aria-label="Dismiss promotion banner"
+              className="absolute right-2.5 top-2.5 w-9 h-9 rounded-full flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowPromoBanner(false)}
-            aria-label="Dismiss promotion banner"
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-white/85 hover:text-white"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
         </div>
       )}
 
@@ -368,9 +373,8 @@ export default function App() {
               <h2 className="font-display text-xl sm:text-2xl font-semibold text-white leading-snug">
                 Join BellyBellyGood today and get a $20 welcome voucher
               </h2>
-              <p className="text-sm text-white/90 tabular-nums">
-                Instant $20 off your order with code WELCOME20 · {totalSignUps}{' '}
-                {totalSignUps === 1 ? 'member' : 'members'} signed up
+              <p className="text-sm text-white/90">
+                Instant $20 off your order with code WELCOME20 · Offer valid till 31st Dec
               </p>
             </div>
 
@@ -752,13 +756,11 @@ export default function App() {
         onRedeemVoucher={handleRedeemVoucher}
       />
 
-      {/* Member Sign-In / Sign-Up & Sign-Up Metric Modal */}
+      {/* Member Sign-In / Sign-Up Modal */}
       <MemberAuthModal
         isOpen={memberModalOpen}
         initialTab={memberModalTab}
         currentMember={currentMember}
-        members={members}
-        totalSignUps={totalSignUps}
         onClose={() => setMemberModalOpen(false)}
         onSignUp={handleSignUp}
         onSignIn={handleSignIn}
